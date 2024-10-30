@@ -76,7 +76,7 @@
         <form method="post">
             {{ form.hidden_tag() }}
             <div class="form-group">
-                {{ form.email(class="form-control", placeholder="Enter your approved email") }}
+                {{ form.email(class="form-control", placeholder="Enter your approved email", oninput="this.value = this.value.toLowerCase()") }}
             </div>
             <div class="form-group">
                 {{ form.submit(class="btn") }}
