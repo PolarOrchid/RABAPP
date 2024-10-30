@@ -7,9 +7,10 @@ from PIL import Image
 import rawpy
 import numpy as np
 import imageio
+import subprocess
 
 def allowed_file(filename):
-    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'dng', 'DNG', 'gpx', 'heic'}
+    allowed_extensions = {'jpg', 'jpeg', 'png', 'gif', 'dng', 'heic', 'mp4', 'mov', 'avi', 'wmv', 'flv', 'mkv', 'hevc'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
 
 def extract_metadata(filepath):

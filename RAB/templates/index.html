@@ -437,10 +437,10 @@ const GalleryManager = (function() {
     }
 
     function getImageUrl(photo) {
-        if (photo.png_url) {
-            return photo.png_url;
-        } else if (photo.preview_url) {
+        if (photo.preview_url) {
             return photo.preview_url;
+        } else if (photo.png_url) {
+            return photo.png_url;
         } else if (photo.original_url) {
             return photo.original_url;
         }
@@ -498,7 +498,6 @@ const GalleryManager = (function() {
                 if (state.loadedPhotoIds.has(photo.id)) {
                     continue;
                 }
-
                 state.loadedPhotoIds.add(photo.id);
                 newPhotosAdded++;
                 state.totalImages++;
@@ -515,6 +514,18 @@ const GalleryManager = (function() {
                 img.src = getImageUrl(photo);
                 img.alt = photo.filename;
                 img.loading = "lazy";
+
+                // Check if the photo is a video
+                if (photo.is_video) {
+                    // Add a play icon overlay
+                    const playIcon = document.createElement('div');
+                    playIcon.className = 'play-icon';
+                    playIcon.innerHTML = '&#9658;'; // Unicode for play symbol
+                    innerDiv.appendChild(img);
+                    innerDiv.appendChild(playIcon);
+                } else {
+                    innerDiv.appendChild(img);
+                }
 
                 const loadPromise = new Promise((resolve, reject) => {
                     img.onload = () => {
@@ -534,7 +545,6 @@ const GalleryManager = (function() {
                     };
                 });
 
-                innerDiv.appendChild(img);
                 linkContainer.appendChild(innerDiv);
                 fragment.appendChild(linkContainer);
 

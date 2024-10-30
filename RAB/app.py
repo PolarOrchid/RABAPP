@@ -36,11 +36,68 @@ import io
 from flask import current_app
 import requests
 from PIL import Image, ImageOps
+import subprocess
+from dotenv import load_dotenv
+import shutil
+import os
+import mimetypes
+from flask import request, send_file, make_response
+from werkzeug.exceptions import RequestedRangeNotSatisfiable
+import re
+
+import os
+import re
+from flask import Response
+from flask import request, Response, current_app
+from functools import partial
+from werkzeug.exceptions import ClientDisconnected
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
+load_dotenv()  # Load environment variables from .env
+
+def send_file_partial(path, start=0, end=None):
+    """Send a file in chunks with proper range handling."""
+    file_size = os.path.getsize(path)
+    
+    # If no end specified, send until the end of file
+    if end is None:
+        end = file_size - 1
+    
+    # Ensure end isn't beyond file size
+    end = min(end, file_size - 1)
+    
+    # Calculate content length
+    chunk_size = end - start + 1
+
+    # Open the file and seek to start
+    with open(path, 'rb') as f:
+        f.seek(start)
+        data = f.read(chunk_size)
+        
+        return data
 
 
+def get_chunk_size(file_size, is_initial_request=False):
+    """
+    Calculate optimal chunk size based on file size and request type
+    """
+    if is_initial_request:
+        return 1024 * 1024  # 1MB for initial load
+    elif file_size > 1024 * 1024 * 1024:  # > 1GB
+        return 5 * 1024 * 1024  # 5MB chunks
+    else:
+        return 2 * 1024 * 1024  # 2MB chunks
+
+
+def get_mimetype(filename):
+    mime_type, _ = mimetypes.guess_type(filename)
+    if mime_type is None:
+        if filename.lower().endswith('.mov'):
+            return 'video/quicktime'
+        # Add other file type checks if necessary
+        return 'application/octet-stream'
+    return mime_type
 
 
 
@@ -105,152 +162,171 @@ def get_photo_url(photo):
     return url_for('static', filename=f'uploads/{photo.filename}')
 
 
+def generate_video_preview(video_path, preview_path):
+    """
+    Generate a preview image from the first frame of a video using ffmpeg.
+    Returns the preview filename if successful, None if failed.
+    """
+    logging.info(f"Attempting to generate video preview from: {video_path}")
+    
+    try:
+        # Ensure the preview directory exists
+        os.makedirs(os.path.dirname(preview_path), exist_ok=True)
+        
+        # First try to extract frame at 1 second
+        command = [
+            'ffmpeg',
+            '-i', video_path,
+            '-ss', '00:00:01.000',
+            '-vframes', '1',
+            '-vf', 'scale=800:-1',
+            '-f', 'image2',
+            '-y',  # Overwrite output file if exists
+            preview_path
+        ]
+        
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False  # Don't raise on error, we'll handle it
+        )
+        
+        # If first attempt fails, try frame 0
+        if result.returncode != 0:
+            logging.warning("Failed to extract frame at 1 second, trying first frame")
+            command[3] = '00:00:00.000'
+            result = subprocess.run(command, capture_output=True, text=True, check=False)
+        
+        if result.returncode != 0:
+            logging.error(f"FFmpeg error: {result.stderr}")
+            return None
+        
+        # Verify the preview file
+        if os.path.exists(preview_path):
+            if os.path.getsize(preview_path) > 0:
+                try:
+                    with Image.open(preview_path) as img:
+                        img.verify()
+                    logging.info("Successfully generated and verified video preview")
+                    return os.path.basename(preview_path)
+                except Exception as e:
+                    logging.error(f"Preview verification failed: {str(e)}")
+                    if os.path.exists(preview_path):
+                        os.remove(preview_path)
+            else:
+                logging.error("Generated preview file is empty")
+                os.remove(preview_path)
+        
+        return None
+        
+    except Exception as e:
+        logging.error(f"Error in generate_video_preview: {str(e)}")
+        if os.path.exists(preview_path):
+            os.remove(preview_path)
+        return None
+
+
 class UploadHandler:
     def __init__(self):
         self.preview_size = (800, 800)
-        logging.basicConfig(level=logging.DEBUG)
         self.logger = logging.getLogger('UploadHandler')
-
-    def process_upload(self, file, upload_folder, preview_folder):
-        """Process upload with HEIC support"""
-        self.logger.info(f"Starting upload process for file: {file.filename}")
+        self.allowed_video_extensions = {'.mp4', '.mov', '.avi', '.wmv', '.flv', '.mkv'}
+        self.allowed_image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.heic', '.dng'}
+    
+    def process_upload(self, file, upload_folder, preview_folder, filename=None, file_already_saved=False):
+        """
+        Process file upload with improved video and error handling.
         
+        Args:
+            file: File object (FileStorage or file-like object)
+            upload_folder: Path to save uploaded files
+            preview_folder: Path to save preview images
+            filename: Optional filename override
+            file_already_saved: Whether the file is already saved to upload_folder
+        """
         try:
-            # Verify upload folder exists and is writable
-            self.logger.debug(f"Checking upload folder: {upload_folder}")
-            if not os.path.exists(upload_folder):
-                os.makedirs(upload_folder)
-                self.logger.info(f"Created upload folder: {upload_folder}")
+            # Get/validate filename
+            if not filename and hasattr(file, 'filename'):
+                filename = file.filename
+            elif not filename:
+                raise ValueError("Filename must be provided if file object lacks filename attribute")
             
-            # Verify preview folder exists and is writable
-            self.logger.debug(f"Checking preview folder: {preview_folder}")
-            if not os.path.exists(preview_folder):
-                os.makedirs(preview_folder)
-                self.logger.info(f"Created preview folder: {preview_folder}")
-
-            # Secure the filename and create paths
-            filename = secure_filename(file.filename)
-            self.logger.debug(f"Secured filename: {filename}")
-            
+            filename = secure_filename(filename)
             filepath = os.path.join(upload_folder, filename)
-            preview_filename = f'preview_{filename}'
-            preview_path = os.path.join(preview_folder, preview_filename)
             
-            self.logger.info(f"File will be saved to: {filepath}")
-            self.logger.info(f"Preview will be saved to: {preview_path}")
+            self.logger.info(f"Processing upload: {filename}")
             
-            # Check if file already exists
-            if os.path.exists(filepath):
-                self.logger.warning(f"File already exists: {filepath}")
+            # Ensure directories exist
+            os.makedirs(upload_folder, exist_ok=True)
+            os.makedirs(preview_folder, exist_ok=True)
+            
+            # Check for existing file
+            if os.path.exists(filepath) and not file_already_saved:
                 return {
-                    'success': False,
-                    'error': 'File already exists',
-                    'filename': filename
+                    'success': True,
+                    'existing': True,
+                    'filename': filename,
+                    'message': f"File '{filename}' already exists"
                 }
             
-            # Save original file with error handling
-            try:
-                self.logger.debug("Attempting to save original file")
-                file.save(filepath)
-                self.logger.info(f"Successfully saved file to {filepath}")
-                
-                # Verify file was saved correctly
-                if not os.path.exists(filepath):
-                    raise IOError(f"File was not saved to {filepath}")
-                
-                file_size = os.path.getsize(filepath)
-                self.logger.info(f"Saved file size: {file_size} bytes")
-                
-                if file_size == 0:
-                    raise IOError("Saved file is empty")
-                
-            except Exception as e:
-                self.logger.error(f"Error saving file: {str(e)}")
-                raise
-
-            # Handle HEIC files
-            converted_filename = None
-            is_heic = filename.lower().endswith(('.heic'))
-            
-            if is_heic:
-                self.logger.info("Processing HEIC file")
+            # Save file if needed
+            if not file_already_saved:
                 try:
-                    # Create a JPG from HEIC
-                    converted_filename = os.path.splitext(filename)[0] + '.jpg'
-                    converted_filepath = os.path.join(upload_folder, converted_filename)
-                    
-                    # Convert HEIC to JPG
-                    conversion_success = convert_heic_to_jpg(filepath, converted_filepath)
-                    
-                    if conversion_success:
-                        self.logger.info(f"JPG generated successfully: {converted_filename}")
-                        # Update preview filename to use JPG extension
-                        preview_filename = f"preview_{os.path.splitext(filename)[0]}.jpg"
-                        preview_path = os.path.join(preview_folder, preview_filename)
+                    if hasattr(file, 'save'):
+                        file.save(filepath)
                     else:
-                        self.logger.warning(f"JPG generation failed for {filename}")
-                        converted_filename = None
-                        
+                        with open(filepath, 'wb') as out_file:
+                            shutil.copyfileobj(file, out_file)
                 except Exception as e:
-                    self.logger.error(f"Error in HEIC to JPG conversion: {str(e)}")
-                    # Continue even if conversion fails
-                        
-            # Handle DNG files
-            is_dng = filename.lower().endswith('.dng')
-            png_filename = None
+                    self.logger.error(f"Error saving file: {str(e)}")
+                    return {'success': False, 'error': f"File save error: {str(e)}"}
             
-            if is_dng:
-                self.logger.info("Processing DNG file")
+            # Verify file
+            if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+                return {'success': False, 'error': 'File save verification failed'}
+            
+            # Determine file type
+            ext = os.path.splitext(filename.lower())[1]
+            is_video = ext in self.allowed_video_extensions
+            is_image = ext in self.allowed_image_extensions
+            
+            preview_filename = None
+            if is_video:
+                self.logger.info("Processing video file")
+                preview_path = os.path.join(preview_folder, f'preview_{os.path.splitext(filename)[0]}.jpg')
+                preview_filename = generate_video_preview(filepath, preview_path)
+                if not preview_filename:
+                    self.logger.warning("Failed to generate video preview, continuing without preview")
+            
+            elif is_image:
+                self.logger.info("Processing image file")
+                preview_path = os.path.join(preview_folder, f'preview_{os.path.splitext(filename)[0]}.jpg')
                 try:
-                    png_filename = os.path.splitext(filename)[0] + '.png'
-                    png_filepath = os.path.join(upload_folder, png_filename)
-                    
-                    conversion_success = generate_png_from_dng(filepath, png_filepath)
-                    
-                    if conversion_success:
-                        self.logger.info(f"PNG generated successfully: {png_filename}")
-                    else:
-                        self.logger.warning(f"PNG generation failed for {filename}")
-                        png_filename = None
-                        
-                except Exception as e:
-                    self.logger.error(f"Error in DNG to PNG conversion: {str(e)}")
-                        
-            else:
-                # Regular image preview generation (including converted HEIC files)
-                self.logger.info("Generating preview for non-DNG file")
-                try:
-                    source_path = converted_filepath if is_heic and converted_filename else filepath
-                    with Image.open(source_path) as img:
-                        # Apply EXIF orientation
+                    with Image.open(filepath) as img:
                         img = ImageOps.exif_transpose(img)
                         img.thumbnail(self.preview_size, Image.LANCZOS)
                         img.save(preview_path, "JPEG", quality=85, optimize=True)
-                    self.logger.info("Successfully generated preview with correct orientation")
+                    preview_filename = os.path.basename(preview_path)
                 except Exception as e:
-                    self.logger.error(f"Error generating preview: {str(e)}")
+                    self.logger.error(f"Error generating image preview: {str(e)}")
+                    preview_filename = None
             
             result = {
                 'success': True,
                 'filename': filename,
                 'filepath': filepath,
                 'preview_filename': preview_filename,
-                'png_filename': png_filename,
-                'converted_filename': converted_filename,
-                'is_dng': is_dng,
-                'is_heic': is_heic
+                'is_video': is_video,
+                'is_image': is_image
             }
-            self.logger.info(f"Upload processing completed successfully: {result}")
+            
+            self.logger.info(f"Upload processed successfully: {filename}")
             return result
             
         except Exception as e:
-            self.logger.error(f"Error processing upload for {file.filename}: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'filename': file.filename
-            }
-
+            self.logger.error(f"Error processing upload: {str(e)}")
+            return {'success': False, 'error': str(e)}
 
 # Initialize the upload handler
 upload_handler = UploadHandler()
@@ -450,7 +526,7 @@ compress = Compress()
 def create_app():
     app = Flask(__name__, static_folder=os.getenv('STATIC_FOLDER'))
     
-    # Load configuration from .env file
+    # Basic configurations
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
     app.config['MAIL_SERVER'] = os.getenv('MAIL_SERVER')
@@ -462,17 +538,41 @@ def create_app():
     app.config['UPLOAD_FOLDER'] = os.getenv('UPLOAD_FOLDER')
     app.config['PREVIEW_FOLDER'] = os.getenv('PREVIEW_FOLDER')
     app.config['CHUNK_FOLDER'] = os.getenv('CHUNK_FOLDER')
-    app.config['COMPRESS_LEVEL'] = 6  # Compression level from 1 (fastest) to 9
-    app.config['COMPRESS_MIN_SIZE'] = 500
-    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600
-
-    # Initialize extensions with app
-    compress.init_app(app)
+    
+    # Parse APPROVED_EMAILS into a list
+    approved_emails_str = os.getenv('APPROVED_EMAILS', '')
+    app.config['APPROVED_EMAILS'] = [email.strip() for email in approved_emails_str.split(',') if email.strip()]
+    
+    # Parse ALLOWED_EXTENSIONS into a set
+    allowed_extensions_str = os.getenv('ALLOWED_EXTENSIONS', '')
+    app.config['ALLOWED_EXTENSIONS'] = set(ext.strip() for ext in allowed_extensions_str.split(',') if ext.strip())
+    
+    # Other configurations
+    app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 16777216000))
+    app.config['COLOR_PROFILE_PATH'] = os.getenv('COLOR_PROFILE_PATH')
+    app.config['ADMIN_EMAIL'] = os.getenv('ADMIN_EMAIL')
+    
+    # Initialize extensions
     db.init_app(app)
     login_manager.init_app(app)
-    login_manager.login_view = 'login'
     mail.init_app(app)
-    migrate.init_app(app, db)
+    csrf.init_app(app)
+    compress.init_app(app)
+
+    @app.template_filter('get_mimetype')
+    def get_mimetype(filename):
+        """Template filter to get MIME type from filename"""
+        mime_type, _ = mimetypes.guess_type(filename)
+        if mime_type is None:
+            # Handle common video types that mimetypes might not detect
+            if filename.lower().endswith('.mov'):
+                return 'video/quicktime'
+            elif filename.lower().endswith('.mkv'):
+                return 'video/x-matroska'
+            # Default fallback
+            return 'video/mp4'
+        return mime_type
+
 
     global s
     s = URLSafeTimedSerializer(app.config['SECRET_KEY'])
@@ -530,17 +630,34 @@ def create_app():
     def login():
         form = EmailForm()
         if form.validate_on_submit():
-            email = form.email.data
-            if email in current_app.config['APPROVED_EMAILS']:
+            email = form.email.data.strip()
+            approved_emails = current_app.config.get('APPROVED_EMAILS', [])
+            
+            if not approved_emails:
+                flash('No approved emails configured. Please contact administrator.', 'danger')
+                current_app.logger.error('APPROVED_EMAILS configuration is empty')
+                return render_template('login.html', form=form)
+                
+            if email in approved_emails:
                 token = s.dumps(email, salt='email-confirm')
                 link = url_for('confirm_email', token=token, _external=True)
-                msg = Message('Your Magic Login Link', sender=current_app.config['MAIL_USERNAME'], recipients=[email])
-                msg.body = f'Click the link to log in: {link}'
-                mail.send(msg)
-                flash('A magic link has been sent to your email.', 'info')
+                
+                try:
+                    msg = Message('Your Magic Login Link', 
+                                sender=current_app.config['MAIL_USERNAME'],
+                                recipients=[email])
+                    msg.body = f'Click the link to log in: {link}'
+                    mail.send(msg)
+                    flash('A magic link has been sent to your email.', 'info')
+                except Exception as e:
+                    current_app.logger.error(f'Error sending email: {str(e)}')
+                    flash('Error sending login email. Please try again later.', 'danger')
+                    
                 return redirect(url_for('login'))
             else:
-                flash('Email not approved.', 'danger')
+                flash('Email not approved for access.', 'danger')
+                current_app.logger.warning(f'Unauthorized login attempt from email: {email}')
+                
         return render_template('login.html', form=form)
 
     @app.route('/confirm_email/<token>')
@@ -656,88 +773,131 @@ def create_app():
     @login_required
     @csrf.exempt
     def upload_chunk():
-        required_params = ['chunkIndex', 'totalChunks', 'filename']
-        if not all(param in request.form for param in required_params) or 'file' not in request.files:
-            return jsonify({'success': False, 'error': 'Missing chunk parameters'}), 400
+        """Handle chunked file uploads with improved error handling."""
+        try:
+            # Validate request
+            required_params = ['chunkIndex', 'totalChunks', 'filename']
+            if not all(param in request.form for param in required_params) or 'file' not in request.files:
+                return jsonify({'success': False, 'error': 'Missing required parameters'}), 400
 
-        chunk_index = int(request.form['chunkIndex'])
-        total_chunks = int(request.form['totalChunks'])
-        filename = secure_filename(request.form['filename'])
-        chunk = request.files['file']
+            # Get request parameters
+            chunk_index = int(request.form['chunkIndex'])
+            total_chunks = int(request.form['totalChunks'])
+            filename = secure_filename(request.form['filename'])
+            chunk = request.files['file']
 
-        # Define paths
-        upload_folder = app.config['UPLOAD_FOLDER']
-        final_path = os.path.join(upload_folder, filename)
+            # Setup paths
+            upload_folder = current_app.config['UPLOAD_FOLDER']
+            final_path = os.path.join(upload_folder, filename)
+            chunk_folder = os.path.join(upload_folder, 'chunks', filename)
 
-        # Before saving the chunk, check if the final file already exists
-        if os.path.exists(final_path):
+            # Check if final file exists
+            if os.path.exists(final_path):
+                return jsonify({
+                    'success': True,
+                    'existing': True,
+                    'message': f"File '{filename}' already exists",
+                    'filename': filename
+                })
+
+            # Ensure chunk directory exists
+            os.makedirs(chunk_folder, exist_ok=True)
+            chunk_path = os.path.join(chunk_folder, f'chunk_{chunk_index}')
+
+            # Save the chunk
+            chunk.save(chunk_path)
+
+            # Check if all chunks received
+            uploaded_chunks = len(os.listdir(chunk_folder))
+            if uploaded_chunks == total_chunks:
+                try:
+                    # Assemble chunks
+                    with open(final_path, 'wb') as final_file:
+                        for i in range(total_chunks):
+                            chunk_file_path = os.path.join(chunk_folder, f'chunk_{i}')
+                            with open(chunk_file_path, 'rb') as chunk_file:
+                                final_file.write(chunk_file.read())
+
+                    # Clean up chunks
+                    shutil.rmtree(chunk_folder)
+
+                    # Process the assembled file
+                    with open(final_path, 'rb') as assembled_file:
+                        result = upload_handler.process_upload(
+                            assembled_file,
+                            upload_folder,
+                            current_app.config['PREVIEW_FOLDER'],
+                            filename=filename,
+                            file_already_saved=True
+                        )
+
+                    if result['success']:
+                        # Create database entry
+                        try:
+                            photo = Photo(
+                                filename=result['filename'],
+                                filepath=result['filepath'],
+                                preview_filename=result.get('preview_filename'),
+                                uploader_id=current_user.id,
+                                upload_time=datetime.utcnow(),
+                                is_video=result.get('is_video', False)
+                            )
+
+                            # Extract and save metadata
+                            metadata = extract_metadata(final_path)
+                            photo.timestamp = metadata.get('timestamp')
+                            photo.latitude = metadata.get('latitude')
+                            photo.longitude = metadata.get('longitude')
+
+                            db.session.add(photo)
+                            db.session.commit()
+
+                            # Update session
+                            if 'uploaded_files' not in session:
+                                session['uploaded_files'] = []
+                            session['uploaded_files'].append(photo.id)
+                            session.modified = True
+
+                            return jsonify({
+                                'success': True, 
+                                'message': 'File uploaded and processed successfully'
+                            })
+
+                        except Exception as e:
+                            db.session.rollback()
+                            logging.error(f"Database error: {str(e)}")
+                            # Delete the file if database insertion fails
+                            if os.path.exists(final_path):
+                                os.remove(final_path)
+                            return jsonify({
+                                'success': False, 
+                                'error': 'Database error occurred'
+                            }), 500
+
+                    else:
+                        if os.path.exists(final_path):
+                            os.remove(final_path)
+                        return jsonify({
+                            'success': False, 
+                            'error': result.get('error', 'Processing error occurred')
+                        })
+
+                except Exception as e:
+                    logging.error(f"Error assembling chunks: {str(e)}")
+                    if os.path.exists(final_path):
+                        os.remove(final_path)
+                    if os.path.exists(chunk_folder):
+                        shutil.rmtree(chunk_folder)
+                    return jsonify({'success': False, 'error': str(e)}), 500
+
             return jsonify({
-                'success': True,
-                'existing': True,
-                'message': f"File '{filename}' already exists",
-                'filename': filename
+                'success': True, 
+                'message': f'Chunk {chunk_index + 1} of {total_chunks} received'
             })
 
-        chunk_folder = os.path.join(upload_folder, 'chunks', filename)
-        os.makedirs(chunk_folder, exist_ok=True)
-        chunk_path = os.path.join(chunk_folder, f'chunk_{chunk_index}')
-
-        # Check if the chunk already exists
-        if os.path.exists(chunk_path):
-            return jsonify({'success': True, 'message': f'Chunk {chunk_index + 1} already exists', 'existing': True})
-
-        # Save the chunk to disk
-        chunk.save(chunk_path)
-
-        # Check if all chunks have been received
-        uploaded_chunks = len(os.listdir(chunk_folder))
-        if uploaded_chunks == total_chunks:
-            # Assemble the chunks
-            with open(final_path, 'wb') as final_file:
-                for i in range(total_chunks):
-                    chunk_file_path = os.path.join(chunk_folder, f'chunk_{i}')
-                    with open(chunk_file_path, 'rb') as chunk_file:
-                        final_file.write(chunk_file.read())
-                    os.remove(chunk_file_path)  # Remove chunk after appending
-            os.rmdir(chunk_folder)  # Remove the chunk folder
-
-            # Process the assembled file (e.g., save metadata, generate previews)
-            with open(final_path, 'rb') as assembled_file:
-                result = upload_handler.process_upload(
-                    assembled_file,
-                    upload_folder,
-                    app.config['PREVIEW_FOLDER']
-                )
-            if result['success']:
-                # Save upload metadata
-                photo = Photo(
-                    filename=filename,
-                    filepath=final_path,
-                    preview_filename=result.get('preview_filename'),
-                    png_filename=result.get('png_filename'),
-                    converted_filename=result.get('converted_filename'),
-                    uploader_id=current_user.id,
-                    upload_time=datetime.utcnow()
-                )
-                metadata = extract_metadata(final_path)
-                photo.timestamp = metadata.get('timestamp')
-                photo.latitude = metadata.get('latitude')
-                photo.longitude = metadata.get('longitude')
-                db.session.add(photo)
-                db.session.commit()
-
-                # Update session['uploaded_files']
-                if 'uploaded_files' not in session:
-                    session['uploaded_files'] = []
-                session['uploaded_files'].append(photo.id)
-                session.modified = True  # Ensure the session is saved
-
-                return jsonify({'success': True, 'message': 'File successfully uploaded and assembled'})
-            else:
-                return jsonify({'success': False, 'error': result.get('error', 'Unknown error')})
-
-        return jsonify({'success': True, 'message': f'Chunk {chunk_index + 1} of {total_chunks} received'})
-
+        except Exception as e:
+            logging.error(f"Chunk upload error: {str(e)}")
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 
         
@@ -985,7 +1145,9 @@ def create_app():
                                 if not photo.filename.lower().endswith(('.dng', '.heic')) else None,
                     'uploader_id': photo.uploader_id,
                     'timestamp': photo.timestamp.isoformat() if photo.timestamp else None,
-                    'total_for_user': total_count
+                    'total_for_user': total_count,
+                    'is_video': photo.is_video  # Include is_video property
+
                 }
                 photo_list.append(photo_data)
 
@@ -1613,7 +1775,46 @@ def create_app():
         abort(404)
 
 
-
+    @app.route('/stream/<path:filename>')
+    @login_required
+    def stream_video(filename):
+        try:
+            video_path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
+            if not os.path.exists(video_path):
+                abort(404)
+            
+            file_size = os.path.getsize(video_path)
+            logging.info(f"Streaming video {filename}, size: {file_size}")
+            range_header = request.headers.get('Range', None)
+            logging.info(f"Range header: {range_header}")
+            if range_header:
+                # Parse the Range header
+                range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+                if range_match:
+                    start = int(range_match.group(1))
+                    end = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+                    if end >= file_size:
+                        end = file_size - 1
+                    chunk_size = end - start + 1
+                    logging.info(f"Sending bytes {start}-{end}/{file_size}, chunk_size: {chunk_size}")
+                    with open(video_path, 'rb') as f:
+                        f.seek(start)
+                        data = f.read(chunk_size)
+                    response = Response(data, 206, mimetype=get_mimetype(filename), direct_passthrough=True)
+                    response.headers.add('Content-Range', f'bytes {start}-{end}/{file_size}')
+                    response.headers.add('Accept-Ranges', 'bytes')
+                    response.headers.add('Content-Length', str(chunk_size))
+                    return response
+                else:
+                    logging.error(f"Invalid Range header: {range_header}")
+                    return Response(status=416)
+            else:
+                # No Range header; send the entire file
+                logging.info("No Range header, sending entire file")
+                return send_file(video_path, mimetype=get_mimetype(filename))
+        except Exception as e:
+            logging.error(f"Error streaming {filename}: {str(e)}")
+            return 'Error streaming video', 500
 
     return app
 

@@ -45,6 +45,28 @@
     .btn {
         margin: 5px;
     }
+
+    .video-preview-container {
+        position: relative;
+        display: inline-block;
+     }
+
+    .video-preview-container img {
+        max-width: 100%;
+        height: auto;
+    }
+
+    .video-preview-container .play-icon {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 40px;
+        color: rgba(255, 255, 255, 0.8);
+        pointer-events: none;
+        text-shadow: 0 0 10px rgba(0,0,0,0.7);
+    }
+
 </style>
 {% endblock %}
 
@@ -72,7 +94,14 @@
             {% if extension == 'dng' and photo.png_filename %}
                 <img src="{{ url_for('static', filename='uploads/' + photo.png_filename) }}" alt="{{ photo.filename }}">
             {% elif extension != 'dng' %}
-                <img src="{{ url_for('static', filename='uploads/' + photo.filename) }}" alt="{{ photo.filename }}">
+                {% if photo.is_video %}
+                    <div class="video-preview-container">
+                        <img src="{{ url_for('static', filename='previews/' + photo.preview_filename) }}" alt="{{ photo.filename }}">
+                        <div class="play-icon">&#9658;</div>
+                    </div>
+                {% else %}
+                    <img src="{{ url_for('static', filename='uploads/' + photo.filename) }}" alt="{{ photo.filename }}">
+                {% endif %}
             {% else %}
                 <p>Preview not available for {{ photo.filename }} (conversion pending or failed).</p>
             {% endif %}

@@ -21,7 +21,13 @@ class EmailForm(FlaskForm):
     submit = SubmitField('Send Magic Link')
 
 class UploadForm(FlaskForm):
-    files = MultipleFileField('Select photos/videos to upload', validators=[DataRequired()])
+    files = MultipleFileField(
+        'Select photos/videos to upload', 
+        validators=[
+            DataRequired(), 
+            FileAllowed(['jpg', 'jpeg', 'png', 'gif', 'dng', 'heic', 'mp4', 'mov', 'avi', 'wmv', 'flv', 'mkv', 'hevc', 'gpx'], 'Only images, videos, and satellite data are allowed!')
+        ]
+    )
     submit = SubmitField('Upload')
 
 class CommentForm(FlaskForm):

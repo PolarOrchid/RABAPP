@@ -217,7 +217,8 @@
             {{ form.hidden_tag() }}
             <div class="form-group">
                 <label for="{{ form.files.id }}" class="file-input-label">{{ form.files.label.text }}</label>
-                {{ form.files(class="form-control", multiple=True, accept=".jpg,.jpeg,.png,.gif,.dng") }}
+                {{ form.files(class="form-control", multiple=True, accept=".jpg,.jpeg,.png,.gif,.dng,.mp4,.mov,.avi,.wmv,.flv,.mkv,.hevc") }}
+
             </div>
             <!-- Container for image previews -->
             <div class="image-preview-container"></div>

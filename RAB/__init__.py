@@ -1,10 +1,11 @@
+# RAB/__init__.py
+
 from flask import Flask
 from .config import Config
 from .extensions import db, login_manager
 from flask_mail import Mail
 from itsdangerous import URLSafeTimedSerializer
-from flask_migrate import Migrate  # Add this line to import Flask-Migrate
-from .app import create_app
+from flask_migrate import Migrate
 
 mail = Mail()
 s = URLSafeTimedSerializer(Config.SECRET_KEY)
@@ -18,10 +19,10 @@ def create_app():
     login_manager.login_view = 'login'
     mail.init_app(app)
 
-    # Initialize Flask-Migrate
-    migrate = Migrate(app, db)  # Add this line to initialize Flask-Migrate
+    # Import models to ensure they are registered with SQLAlchemy
+    from .models import User, Photo, Comment, Favorite
 
-    with app.app_context():
-        db.create_all()
+    # Initialize Flask-Migrate after models are imported
+    migrate = Migrate(app, db)
 
     return app
