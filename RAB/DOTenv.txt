@@ -1,6 +1,6 @@
 # Rename this file from DOTenv.txt to .env to activate environment variable settings.
 
-# Flask App Secret Key - enter a unique, secure key here.
+# Flask App Secret Key - enter a unique, secure key here. You can use the secrets.py to generate one.
 SECRET_KEY=YOUR_SECRET_KEY_HERE
 
 # Database Configuration
