@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block head %}
+{{ super() }}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- Leaflet Control Geocoder CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+<style>
+    .map-container {
+        height: 300px;
+        margin-bottom: 20px;
+        display: none;
+    }
+    .photo-review-container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 20px;
+    }
+    .photo-review-item {
+        width: 300px;
+        margin-bottom: 20px;
+        border: 1px solid #ddd;
+        padding: 10px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .photo-review-item img {
+        max-width: 100%;
+        height: auto;
+        max-height: 200px;
+        object-fit: cover;
+    }
+    .photo-info {
+        margin-top: 10px;
+    }
+    .metadata-edit-form {
+        margin-top: 10px;
+    }
+    .form-control {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    .btn {
+        margin: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2 class="text-center mb-4">Review Uploaded Photos</h2>
+
+    <!-- GPX File Upload Form -->
+    <form method="post" enctype="multipart/form-data" id="gpx-form" class="mb-4 text-center">
+        {{ form.hidden_tag() }}
+        {{ form.gpx_files.label }}<br>
+        {{ form.gpx_files(size=40) }}<br><br>
+        {{ form.submit(class="btn btn-primary") }}
+    </form>
+
+    <!-- Batch Accept Form -->
+    <form method="post" class="batch-form text-center mb-4">
+        <button type="submit" name="batch_accept" class="btn btn-success">Accept All</button>
+    </form>
+
+    <div id="photo-review-container" class="photo-review-container">
+        {% for photo in photos %}
+        <div class="photo-review-item" data-photo-id="{{ photo.id }}">
+            {% set extension = photo.filename.rsplit('.', 1)[1].lower() %}
+            {% if extension == 'dng' and photo.png_filename %}
+                <img src="{{ url_for('static', filename='uploads/' + photo.png_filename) }}" alt="{{ photo.filename }}">
+            {% elif extension != 'dng' %}
+                <img src="{{ url_for('static', filename='uploads/' + photo.filename) }}" alt="{{ photo.filename }}">
+            {% else %}
+                <p>Preview not available for {{ photo.filename }} (conversion pending or failed).</p>
+            {% endif %}
+            
+            <div class="photo-info">
+                <p><strong>Filename:</strong> {{ photo.filename }}</p>
+                <p><strong>Latitude:</strong> <span class="latitude-value">{{ photo.latitude or 'N/A' }}</span></p>
+                <p><strong>Longitude:</strong> <span class="longitude-value">{{ photo.longitude or 'N/A' }}</span></p>
+                <p><strong>Timestamp:</strong> <span class="timestamp-value">{{ photo.timestamp or 'N/A' }}</span></p>
+                <button class="btn btn-secondary edit-metadata-btn">Edit Metadata</button>
+            </div>
+            
+            <div class="metadata-edit-form" style="display: none;">
+                <div class="map-container" id="map-{{ photo.id }}"></div>
+                <input type="number" step="any" class="form-control latitude-input" placeholder="Latitude" readonly>
+                <input type="number" step="any" class="form-control longitude-input" placeholder="Longitude" readonly>
+                <input type="datetime-local" class="form-control timestamp-input">
+                <button class="btn btn-primary save-metadata-btn">Save</button>
+                <button class="btn btn-secondary cancel-edit-btn">Cancel</button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- The script section remains the same as in the previous version -->
+{{ super() }}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet Control Geocoder JS -->
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const container = document.getElementById('photo-review-container');
+
+    container.addEventListener('click', function(e) {
+        if (e.target.classList.contains('edit-metadata-btn')) {
+            const item = e.target.closest('.photo-review-item');
+            const infoDiv = item.querySelector('.photo-info');
+            const editForm = item.querySelector('.metadata-edit-form');
+            const mapContainer = editForm.querySelector('.map-container');
+            
+            infoDiv.style.display = 'none';
+            editForm.style.display = 'block';
+            mapContainer.style.display = 'block';
+            
+            // Populate form with current values
+            const latitudeInput = editForm.querySelector('.latitude-input');
+            const longitudeInput = editForm.querySelector('.longitude-input');
+            const timestampInput = editForm.querySelector('.timestamp-input');
+            
+            latitudeInput.value = infoDiv.querySelector('.latitude-value').textContent;
+            longitudeInput.value = infoDiv.querySelector('.longitude-value').textContent;
+            timestampInput.value = infoDiv.querySelector('.timestamp-value').textContent;
+
+            // Initialize map
+            const mapId = mapContainer.id;
+            const lat = parseFloat(latitudeInput.value) || 0;
+            const lng = parseFloat(longitudeInput.value) || 0;
+            const map = L.map(mapId).setView([lat, lng], lat && lng ? 15 : 2);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            let marker;
+            if (lat && lng) {
+                marker = L.marker([lat, lng], {draggable: true}).addTo(map);
+            }
+
+            const geocoder = L.Control.geocoder({
+                defaultMarkGeocode: false
+            })
+            .on('markgeocode', function(e) {
+                const latlng = e.geocode.center;
+                map.setView(latlng, 15);
+                if (marker) {
+                    map.removeLayer(marker);
+                }
+                marker = L.marker(latlng, {draggable: true}).addTo(map);
+                updateLatLngInputs(latitudeInput, longitudeInput, latlng.lat, latlng.lng);
+                marker.on('dragend', function(e) {
+                    const latlng = e.target.getLatLng();
+                    updateLatLngInputs(latitudeInput, longitudeInput, latlng.lat, latlng.lng);
+                });
+            })
+            .addTo(map);
+
+            map.on('click', function(e) {
+                const latlng = e.latlng;
+                if (marker) {
+                    map.removeLayer(marker);
+                }
+                marker = L.marker(latlng, {draggable: true}).addTo(map);
+                updateLatLngInputs(latitudeInput, longitudeInput, latlng.lat, latlng.lng);
+                marker.on('dragend', function(e) {
+                    const latlng = e.target.getLatLng();
+                    updateLatLngInputs(latitudeInput, longitudeInput, latlng.lat, latlng.lng);
+                });
+            });
+
+            // Force a map resize after it becomes visible
+            setTimeout(() => map.invalidateSize(), 0);
+        }
+        
+        if (e.target.classList.contains('save-metadata-btn')) {
+            const item = e.target.closest('.photo-review-item');
+            const photoId = item.dataset.photoId;
+            const latitude = item.querySelector('.latitude-input').value;
+            const longitude = item.querySelector('.longitude-input').value;
+            const timestamp = item.querySelector('.timestamp-input').value;
+            
+            // Send AJAX request to update metadata
+            fetch(`/edit_metadata/${photoId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token() if csrf_token else "" }}'
+                },
+                body: JSON.stringify({ latitude, longitude, timestamp })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update displayed values
+                    item.querySelector('.latitude-value').textContent = latitude;
+                    item.querySelector('.longitude-value').textContent = longitude;
+                    item.querySelector('.timestamp-value').textContent = timestamp;
+                    
+                    // Hide edit form, show info
+                    item.querySelector('.metadata-edit-form').style.display = 'none';
+                    item.querySelector('.photo-info').style.display = 'block';
+                } else {
+                    alert('Failed to update metadata');
+                }
+            });
+        }
+        
+        if (e.target.classList.contains('cancel-edit-btn')) {
+            const item = e.target.closest('.photo-review-item');
+            item.querySelector('.metadata-edit-form').style.display = 'none';
+            item.querySelector('.photo-info').style.display = 'block';
+        }
+    });
+
+    function updateLatLngInputs(latInput, lngInput, lat, lng) {
+        latInput.value = lat.toFixed(6);
+        lngInput.value = lng.toFixed(6);
+    }
+});
+</script>
+{% endblock %}

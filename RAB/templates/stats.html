@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block head %}
+{{ super() }}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+    #mapid {
+        width: 100%;
+        height: 70vh; /* Ensure the map has a height */
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<h2>Statistics</h2>
+<div class="stats-container">
+    <div class="stat-item">
+        <h3>Total Photos</h3>
+        <p>{{ total_photos }}</p>
+    </div>
+    <div class="stat-item">
+        <h3>Total Storage Used</h3>
+        <p>{{ '{:.2f}'.format(total_storage) }} MB</p>
+    </div>
+    <div class="stat-item">
+        <h3>Most Popular Photo Times</h3>
+        <ul>
+            <li>Most Frequent Day: {{ most_common_day[0] }} ({{ most_common_day[1] }} photos)</li>
+            <li>Most Frequent Hour: {{ most_common_hour[0] }}:00 - {{ most_common_hour[1] }} photos</li>
+        </ul>
+    </div>
+    <div class="stat-item">
+        <h3>Popular Locations Map (Averaged within 4-block radius)</h3>
+        <div id="mapid"></div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var map = L.map('mapid').setView([0, 0], 2);  // Center map on the world initially
+
+        // Add the tile layer (this provides the map visuals)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: 'Benjamin'
+        }).addTo(map);
+
+        var popularLocations = [
+            {% for loc in popular_locations %}
+            {
+                "latitude": {{ loc.latitude }},
+                "longitude": {{ loc.longitude }},
+                "count": {{ loc.count }},
+                "photos": [
+                    {% for photo in loc.photos %}
+                    {
+                        "filename": "{{ photo.filename }}",
+                        "url": "{{ url_for('photo_view', photo_id=photo.photo_id) }}",
+                        "latitude": {{ photo.latitude }},
+                        "longitude": {{ photo.longitude }}
+                    }{% if not loop.last %},{% endif %}
+                    {% endfor %}
+                ]
+            }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        // Ensure there are popular locations to display
+        if (popularLocations.length === 0) {
+            console.error("No popular locations available.");
+        } else {
+            // Add circles for popular locations
+            popularLocations.forEach(function(loc) {
+                var clusterPopupContent = '<strong>Photos in this area (' + loc.count + '):</strong><br>';
+
+                // Create markers for each individual photo in the cluster
+                loc.photos.forEach(function(photo) {
+                    var photoMarker = L.marker([photo.latitude, photo.longitude]).addTo(map)
+                        .bindPopup('<a href="' + photo.url + '"><img src="' + photo.filename + '" alt="Photo" width="100"></a>');
+
+                    clusterPopupContent += '<a href="' + photo.url + '"><img src="' + photo.filename + '" alt="Photo" width="100"></a><br>';
+                });
+
+                // Add a circle to represent the entire cluster area
+                L.circle([loc.latitude, loc.longitude], {
+                    color: 'yellow',
+                    fillColor: '#FCD100',
+                    fillOpacity: 0.5,
+                    radius: 400  // 400 meters radius
+                }).addTo(map)
+                .bindPopup(clusterPopupContent);
+            });
+
+            // Fit the map to the bounds of the markers
+            var bounds = new L.LatLngBounds(popularLocations.map(function(loc) {
+                return [loc.latitude, loc.longitude];
+            }));
+            map.fitBounds(bounds);
+        }
+    });
+</script>
+{% endblock %}

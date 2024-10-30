@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% set include_leaflet = True %}
+{% block head %}
+{{ super() }}
+<style>
+    #mapid {
+        width: 100%;
+        height: 50vh; /* Ensure the map has a height */
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<h2>Your Account</h2>
+<div class="stats-container">
+    <div class="stat-item">
+        <h3>Total Photos</h3>
+        <p>{{ total_photos }}</p>
+    </div>
+    <div class="stat-item">
+        <h3>Total Storage Used</h3>
+        <p>{{ '{:.2f}'.format(total_storage) }} MB</p>
+    </div>
+    <div class="stat-item">
+        <h3>Most Popular Photo Times</h3>
+        <ul>
+            <li>Most Frequent Day: {{ most_common_day[0] }} ({{ most_common_day[1] }} photos)</li>
+            <li>Most Frequent Hour: {{ most_common_hour[0] }}:00 - {{ most_common_hour[1] }} photos</li>
+        </ul>
+    </div>
+    <div class="stat-item">
+        <h3>Popular Locations Map (Averaged within 4-block radius)</h3>
+        <div id="mapid"></div>
+    </div>
+</div>
+
+<h3>Upload GPX Files to Tag Your Photos Automatically</h3>
+<form method="post" enctype="multipart/form-data">
+    {{ form.csrf_token }}
+    {{ form.hidden_tag() }}
+    {{ form.gpx_files.label }}<br>
+    {{ form.gpx_files() }}<br><br>
+    <input type="submit" value="Upload GPX Files">
+</form>
+
+{# Debug information #}
+<div>
+    <p>Debug Info:</p>
+    <p>Is authenticated: {{ current_user.is_authenticated }}</p>
+    <p>Current user email: {{ current_user.email }}</p>
+</div>
+
+{% if current_user.is_authenticated and current_user.email.lower() == 'benjamin765@gmail.com' %}
+<!-- Duplicate Photo Scan and Cleanup Broken Links (Only for Benjamin765@gmail.com) -->
+<h3>Manage Duplicate Photos</h3>
+<form method="post" action="{{ url_for('scan_duplicates') }}">
+    <input type="submit" value="Scan for Duplicate Photos" class="btn">
+</form>
+
+{% if duplicates %}
+    <h3>Duplicate Photos Found:</h3>
+    <ul>
+        {% for photo in duplicates %}
+            <li>{{ photo.filename }} (Uploaded on: {{ photo.timestamp }})</li>
+        {% endfor %}
+    </ul>
+    <form method="post" action="{{ url_for('delete_duplicates') }}">
+        <input type="submit" value="Delete All Duplicates" class="btn btn-danger">
+    </form>
+{% endif %}
+
+<!-- Cleanup Broken Image Links Button -->
+<h3>Cleanup Broken Image Links</h3>
+<form method="post" action="{{ url_for('cleanup_broken_images') }}">
+    <input type="submit" value="Cleanup Broken Images" class="btn btn-warning">
+</form>
+{% else %}
+<p>Admin features are not available for your account.</p>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var map = L.map('mapid').setView([0, 0], 2);  // Center map on the world initially
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: 'Rabideauisms'
+        }).addTo(map);
+
+        var popularLocations = {{ popular_locations | tojson | safe }};
+
+        if (popularLocations.length === 0) {
+            console.error("No popular locations available.");
+        } else {
+            popularLocations.forEach(function(loc) {
+                var clusterPopupContent = '<strong>Photos in this area (' + loc.count + '):</strong><br>';
+
+                loc.photos.forEach(function(photo) {
+                    var photoUrl = "{{ url_for('static', filename='uploads/') }}" + photo.filename;
+                    var photoViewUrl = "{{ url_for('photo_view', photo_id=0) }}".replace('0', photo.id);
+                    
+                    var photoMarker = L.marker([photo.latitude, photo.longitude]).addTo(map)
+                        .bindPopup('<a href="' + photoViewUrl + '"><img src="' + photoUrl + '" alt="Photo" width="100"></a>');
+
+                    clusterPopupContent += '<a href="' + photoViewUrl + '"><img src="' + photoUrl + '" alt="Photo" width="100"></a><br>';
+                });
+
+                L.circle([loc.latitude, loc.longitude], {
+                    color: 'yellow',
+                    fillColor: '#FCD100',
+                    fillOpacity: 0.5,
+                    radius: 400
+                }).addTo(map)
+                .bindPopup(clusterPopupContent);
+            });
+
+            var bounds = new L.LatLngBounds(popularLocations.map(function(loc) {
+                return [loc.latitude, loc.longitude];
+            }));
+            map.fitBounds(bounds);
+        }
+
+        // Display duplicate photos if any
+        var duplicates = {{ duplicates | tojson | safe }};
+        var duplicatesList = document.getElementById('duplicates-list');
+        if (duplicates && duplicates.length > 0) {
+            duplicatesList.innerHTML = '<h3>Duplicate Photos Found:</h3><ul>';
+            duplicates.forEach(function(photo) {
+                duplicatesList.innerHTML += '<li>' + photo.filename + ' (Uploaded on: ' + (photo.timestamp || 'Unknown') + ')</li>';
+            });
+            duplicatesList.innerHTML += '</ul>';
+        } else {
+            duplicatesList.innerHTML = '<p>No duplicate photos found.</p>';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h2>Recent Comments</h2>
+<div class="recent-comments">
+    {% for item in comments_with_photos %}
+    <div class="comment-item">
+        <p>
+            <strong>{{ item.comment.author.email }}</strong> commented on 
+            <a href="{{ url_for('photo_view', photo_id=item.photo.id) }}">this photo</a>:
+        </p>
+        <p class="comment-content">{{ item.comment.content }}</p>
+        <p class="comment-timestamp">{{ item.comment.timestamp.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

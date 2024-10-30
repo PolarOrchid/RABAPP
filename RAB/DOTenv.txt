@@ -1,0 +1,43 @@
+# Rename this file from DOTenv.txt to .env to activate environment variable settings.
+
+# Flask App Secret Key - enter a unique, secure key here.
+SECRET_KEY=YOUR_SECRET_KEY_HERE
+
+# Database Configuration
+# Specify the database URL. For example, using SQLite:
+DATABASE_URL=sqlite:///site.db
+
+# Mail Server Configuration
+# These settings are used for sending emails (e.g., for password recovery or notifications).
+MAIL_SERVER=smtp.example.com  # Enter your SMTP server address here
+MAIL_PORT=465                 # Common ports are 465 (SSL) or 587 (TLS)
+MAIL_USE_TLS=False            # Set to True if TLS is required, otherwise use SSL
+MAIL_USE_SSL=True             # Set to True if SSL is required
+MAIL_USERNAME=your-email@example.com  # Your email address for the mail server
+MAIL_PASSWORD=your-email-password     # Your email password or app-specific password
+
+# File Paths for Uploads, Previews, and Static Files
+# These should point to directories on your server or local machine.
+UPLOAD_FOLDER=/path/to/uploads           # Folder where uploads are stored
+PREVIEW_FOLDER=/path/to/previews         # Folder where previews are stored
+CHUNK_FOLDER=/path/to/uploads/chunks     # Folder for storing file upload chunks
+STATIC_FOLDER=/path/to/static            # Static folder for serving CSS, JS, etc.
+
+# Allowed File Extensions - comma-separated list of allowed file types for uploads.
+ALLOWED_EXTENSIONS=png,jpg,jpeg,gif,mp4,mov
+
+# Approved Emails
+# List of emails allowed for special access or admin privileges.
+APPROVED_EMAILS=admin@example.com,user@example.com
+
+# Maximum Content Length
+# Set a limit on the maximum upload size (in bytes).
+MAX_CONTENT_LENGTH=1677721600000  # Example for a high limit (1.5 TB)
+
+# Color Profile Path for Image Processing
+# Specify the path to the color profile used in image processing (e.g., Display P3).
+COLOR_PROFILE_PATH=/System/Library/ColorSync/Profiles/Display\ P3.icc
+
+# Admin Email
+# Define the admin email to enable admin-only routes and functions.
+ADMIN_EMAIL=admin@example.com

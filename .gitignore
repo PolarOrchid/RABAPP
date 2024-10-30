@@ -1,0 +1,35 @@
+# Environment variables
+.env
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment folders
+.venv/
+venv/
+
+# macOS system files
+.DS_Store
+
+# Log files
+*.log
+
+# Database files
+RAB/site.db
+
+# Ignore all files in static/uploads but keep the directory
+static/uploads/*
+!static/uploads/.gitkeep
+
+# Ignore all files in RAB/static/previews but keep the directory
+RAB/static/previews/*
+!RAB/static/previews/.gitkeep
+
+# Ignore migrations directory
+migrations/
+
+# Ignore chunked-upload-worker directory
+chunked-upload-worker/
+

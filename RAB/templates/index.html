@@ -1,0 +1,631 @@
+{% extends "base.html" %}
+
+{% block head %}
+{{ super() }}
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Lato:wght@300;400&display=swap" rel="stylesheet">
+<style>
+    body {
+        font-family: 'Lato', sans-serif;
+        background-color: #f8f5f2;
+    }
+
+    h2 {
+        font-family: 'Playfair Display', serif;
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    /* Filter Menu Styles */
+    .filter-menu {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: 12px;
+        width: 260px;
+        border: 1px solid #e0d9d5;
+        margin: 20px auto;
+    }
+
+    .filter-menu h2 {
+        font-family: 'Playfair Display', serif;
+        margin: 0 0 10px;
+        color: #2c3e50;
+        font-size: 18px;
+        text-align: center;
+        font-weight: 700;
+    }
+
+    .filter-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+
+    .filter-column {
+        width: 48%;
+    }
+
+    .filter-menu label {
+        display: block;
+        margin-bottom: 2px;
+        color: #34495e;
+        font-size: 12px;
+        font-weight: 300;
+    }
+
+    .filter-menu input[type="date"], .filter-menu select {
+        width: 100%;
+        padding: 4px;
+        border: 1px solid #bdc3c7;
+        border-radius: 4px;
+        box-sizing: border-box;
+        font-size: 12px;
+        font-family: 'Lato', sans-serif;
+        color: #2c3e50;
+        background-color: #ecf0f1;
+    }
+
+    .checkbox-container {
+        display: flex;
+        align-items: center;
+        font-size: 12px;
+        color: #34495e;
+    }
+
+    .filter-menu input[type="checkbox"] {
+        margin-right: 4px;
+        width: 14px;
+        height: 14px;
+    }
+
+    .filter-menu button {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 6px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        width: 100%;
+        font-size: 14px;
+        font-family: 'Lato', sans-serif;
+        transition: background-color 0.3s;
+        margin-top: 8px;
+    }
+
+    .filter-menu button:hover {
+        background-color: #2980b9;
+    }
+
+    .fleur-de-lis {
+        text-align: center;
+        font-size: 16px;
+        color: #bdc3c7;
+        margin-top: 8px;
+    }
+
+    /* Gallery Styles */
+    .gallery {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: space-around;
+        gap: 20px;
+        padding: 20px;
+    }
+
+    .photo {
+        width: calc(50% - 20px);
+        max-width: 600px;
+        background-color: #fff;
+        border-radius: 8px;
+        overflow: hidden; /* Prevents image overflow */
+    }
+
+    .photo-inner {
+        position: relative;
+        width: 100%;
+        padding-bottom: 75%;
+        overflow: hidden; /* Prevents image overflow */
+    }
+
+
+    .photo img {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        max-height: 100%; /* This ensures the image doesn't grow too large */
+        transition: transform 0.3s ease;
+    }
+
+    .photo:hover img {
+        transform: scale(1.05);
+    }
+
+    /* Modal/Lightbox Styles */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal-content {
+        position: relative;
+        max-width: 90%;
+        max-height: 90vh;
+        margin: auto;
+    }
+
+    .full-image {
+        max-width: 100%;
+        max-height: 90vh;
+        object-fit: contain;
+        display: block;
+    }
+
+    .close {
+        position: absolute;
+        top: -40px;
+        right: 0;
+        color: #fff;
+        font-size: 30px;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 5px;
+        z-index: 1001;
+    }
+
+    .modal-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        color: white;
+        font-size: 30px;
+        cursor: pointer;
+        padding: 20px;
+        background-color: rgba(0, 0, 0, 0.5);
+        border-radius: 5px;
+        user-select: none;
+        transition: background-color 0.3s;
+    }
+
+    .modal-nav:hover {
+        background-color: rgba(0, 0, 0, 0.8);
+    }
+
+    .prev {
+        left: 20px;
+    }
+
+    .next {
+        right: 20px;
+    }
+
+    .loading-indicator {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        background-color: rgba(0, 0, 0, 0.7);
+        padding: 10px 20px;
+        border-radius: 5px;
+        display: none;
+    }
+
+    /* Loading Screen Styles */
+    .loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #f8f5f2;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease-out;
+    }
+
+    .loading-content {
+        text-align: center;
+    }
+
+    .loading-icon {
+        width: 80px;
+        height: 80px;
+        border: 4px solid #3498db;
+        border-top: 4px solid #f8f5f2;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+        margin-top: 20px;
+        font-family: 'Playfair Display', serif;
+        font-size: 24px;
+        color: #2c3e50;
+    }
+
+    .loading-subtext {
+        margin-top: 10px;
+        font-family: 'Lato', sans-serif;
+        font-size: 16px;
+        color: #34495e;
+    }
+
+    /* Hide content initially */
+    .content {
+        opacity: 0;
+        transition: opacity 0.5s ease-in;
+    }
+
+    /* Loading more photos text */
+    .loading-more {
+        text-align: center;
+        padding: 10px;
+        font-family: 'Lato', sans-serif;
+        font-size: 16px;
+        color: #2c3e50;
+    }
+
+    @media (max-width: 768px) {
+        .photo {
+            width: calc(50% - 20px);
+        }
+        .modal-nav {
+            padding: 15px;
+            font-size: 24px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .photo {
+            width: 100%;
+        }
+        .modal-nav {
+            padding: 10px;
+            font-size: 20px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Loading Screen -->
+<div class="loading-screen" id="loadingScreen">
+    <div class="loading-content">
+        <div class="loading-icon"></div>
+        <div class="loading-text">Chargement...</div>
+        <div class="loading-subtext">Preparing your French memories</div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="content" id="mainContent">
+    <h2>France 2024</h2>
+    
+    <!-- Filter Menu -->
+    <div class="filter-menu">
+        <h2>Filter Options</h2>
+        <form method="get" action="{{ url_for('index') }}">
+            <div class="filter-row">
+                <div class="filter-column">
+                    <label for="date_from">From:</label>
+                    <input type="date" name="date_from" id="date_from" value="{{ date_from }}">
+                </div>
+                <div class="filter-column">
+                    <label for="date_to">To:</label>
+                    <input type="date" name="date_to" id="date_to" value="{{ date_to }}">
+                </div>
+            </div>
+            <div class="filter-row">
+                <div class="filter-column">
+                    <label for="uploader">Uploaded by:</label>
+                    <select name="uploader" id="uploader">
+                        <option value="">All Users</option>
+                        {% for user in users %}
+                        <option value="{{ user.id }}" {% if user.id == uploader_id %}selected{% endif %}>{{ user.email }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-column">
+                    <div class="checkbox-container" style="margin-top: 18px;">
+                        <input type="checkbox" name="favorites" id="show-favorites" value="true" {% if show_favorites %}checked{% endif %}>
+                        <label for="show-favorites">Favorites only</label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit">Apply Filter</button>
+        </form>
+        <div class="fleur-de-lis">⚜</div>
+    </div>
+
+    <!-- Gallery -->
+    <div class="gallery" id="photoGallery">
+        <!-- Photos will be dynamically loaded here -->
+    </div>
+
+    <!-- Loading More Photos Text -->
+    <div class="loading-more" id="loadingMore" style="display: none;">
+        Loading more photos...
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal" id="imageModal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <img class="full-image" src="" alt="Full size image">
+        <div class="modal-nav prev">&lt;</div>
+        <div class="modal-nav next">&gt;</div>
+        <div class="loading-indicator">Loading...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+const GalleryManager = (function() {
+    const state = {
+        page: 1,
+        loading: false,
+        hasMorePhotos: true,
+        loadedPhotoIds: new Set(),
+        totalPhotosForUser: null,
+        imagesLoaded: 0,
+        totalImages: 0
+    };
+
+    const elements = {
+        loadingScreen: document.getElementById('loadingScreen'),
+        mainContent: document.getElementById('mainContent'),
+        gallery: document.getElementById('photoGallery'),
+        filterForm: document.querySelector('.filter-menu form'),
+        loadingMore: document.getElementById('loadingMore')
+    };
+
+    function getFilterParams() {
+        const params = new URLSearchParams();
+        params.append('page', state.page);
+        
+        const uploaderSelect = document.getElementById('uploader');
+        if (uploaderSelect && uploaderSelect.value) {
+            params.append('uploader', uploaderSelect.value);
+        }
+        
+        const dateFrom = document.getElementById('date_from');
+        const dateTo = document.getElementById('date_to');
+        if (dateFrom && dateFrom.value) params.append('date_from', dateFrom.value);
+        if (dateTo && dateTo.value) params.append('date_to', dateTo.value);
+        
+        const favoritesCheckbox = document.getElementById('show-favorites');
+        if (favoritesCheckbox && favoritesCheckbox.checked) {
+            params.append('favorites', 'true');
+        }
+        
+        return params;
+    }
+
+    function hideLoadingScreen() {
+        if (elements.loadingScreen) {
+            elements.loadingScreen.style.opacity = '0';
+            if (elements.mainContent) {
+                elements.mainContent.style.opacity = '1';
+            }
+            setTimeout(function() {
+                elements.loadingScreen.style.display = 'none';
+            }, 500);
+        }
+    }
+
+    function getImageUrl(photo) {
+        if (photo.png_url) {
+            return photo.png_url;
+        } else if (photo.preview_url) {
+            return photo.preview_url;
+        } else if (photo.original_url) {
+            return photo.original_url;
+        }
+        return null;
+    }
+
+    function checkAllImagesLoaded() {
+        if (state.imagesLoaded >= state.totalImages) {
+            hideLoadingScreen();
+        }
+    }
+
+    function shouldLoadMore() {
+        const viewportHeight = window.innerHeight;
+        const totalHeight = document.documentElement.scrollHeight;
+        const scrollPosition = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+        const bottomThreshold = 1000;
+        return (totalHeight - (scrollPosition + viewportHeight)) < bottomThreshold;
+    }
+
+    async function loadMorePhotos() {
+        if (state.loading || !state.hasMorePhotos) return;
+
+        state.loading = true;
+        if (elements.loadingMore) {
+            elements.loadingMore.style.display = 'block';
+        }
+
+        try {
+            const params = getFilterParams();
+            const response = await fetch(`/get_photos?${params.toString()}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!Array.isArray(data) || data.length === 0) {
+                state.hasMorePhotos = false;
+                if (elements.loadingMore) {
+                    elements.loadingMore.style.display = 'none';
+                }
+                return;
+            }
+
+            if (data[0] && data[0].total_for_user !== undefined) {
+                state.totalPhotosForUser = data[0].total_for_user;
+            }
+
+            const fragment = document.createDocumentFragment();
+            let newPhotosAdded = 0;
+
+            for (const photo of data) {
+                if (state.loadedPhotoIds.has(photo.id)) {
+                    continue;
+                }
+
+                state.loadedPhotoIds.add(photo.id);
+                newPhotosAdded++;
+                state.totalImages++;
+
+                const linkContainer = document.createElement('a');
+                linkContainer.href = `/photo/${photo.id}`;
+                linkContainer.className = 'photo';
+                linkContainer.style.textDecoration = 'none';
+
+                const innerDiv = document.createElement('div');
+                innerDiv.className = 'photo-inner';
+
+                const img = document.createElement('img');
+                img.src = getImageUrl(photo);
+                img.alt = photo.filename;
+                img.loading = "lazy";
+
+                const loadPromise = new Promise((resolve, reject) => {
+                    img.onload = () => {
+                        state.imagesLoaded++;
+                        const aspectRatio = (img.naturalHeight / img.naturalWidth) * 100;
+                        innerDiv.style.paddingBottom = `${aspectRatio}%`;
+                        resolve();
+                    };
+
+                    img.onerror = () => {
+                        state.imagesLoaded++;
+                        if (photo.png_url && img.src !== photo.png_url) {
+                            img.src = photo.png_url;
+                        } else {
+                            reject(new Error(`Failed to load image ${photo.id}`));
+                        }
+                    };
+                });
+
+                innerDiv.appendChild(img);
+                linkContainer.appendChild(innerDiv);
+                fragment.appendChild(linkContainer);
+
+                loadPromise.catch(() => {
+                    linkContainer.remove();
+                }).finally(() => {
+                    checkAllImagesLoaded();
+                });
+            }
+
+            if (newPhotosAdded > 0) {
+                elements.gallery.appendChild(fragment);
+                state.page++;
+            }
+
+            if (state.totalPhotosForUser !== null && state.loadedPhotoIds.size >= state.totalPhotosForUser) {
+                state.hasMorePhotos = false;
+            } else if (data.length < 3) {
+                state.hasMorePhotos = false;
+            }
+            
+        } catch (error) {
+            console.error("Error loading photos:", error);
+            state.hasMorePhotos = false;
+        } finally {
+            state.loading = false;
+            if (elements.loadingMore) {
+                elements.loadingMore.style.display = 'none';
+            }
+        }
+    }
+
+    function init() {
+        // Handle filter form submission
+        if (elements.filterForm) {
+            elements.filterForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                elements.gallery.innerHTML = '';
+                state.page = 1;
+                state.hasMorePhotos = true;
+                state.loadedPhotoIds.clear();
+                state.totalPhotosForUser = null;
+                state.imagesLoaded = 0;
+                state.totalImages = 0;
+                
+                loadMorePhotos();
+            });
+        }
+
+        // Scroll event handler with debounce
+        const handleScroll = debounce(function() {
+            if (!state.loading && state.hasMorePhotos && shouldLoadMore()) {
+                loadMorePhotos();
+            }
+        }, 100);
+
+        // Add scroll event listeners for both desktop and mobile
+        ['scroll', 'touchmove', 'resize'].forEach(eventType => {
+            window.addEventListener(eventType, handleScroll, { passive: true });
+        });
+
+        // Initial load
+        loadMorePhotos();
+
+        // Check for more content after all images are loaded
+        window.addEventListener('load', handleScroll);
+    }
+
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    return { init };
+})();
+
+// Initialize gallery only if we're on the gallery page
+if (document.getElementById('photoGallery')) {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', GalleryManager.init);
+    } else {
+        GalleryManager.init();
+    }
+}
+    </script>
+{% endblock %}

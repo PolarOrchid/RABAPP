@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block head %}
+{{ super() }}
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<!-- Leaflet Control Geocoder CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+<style>
+    #mapid {
+        height: 400px;
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<h2>Edit Metadata for {{ photo.filename }}</h2>
+
+<!-- Display the photo -->
+<img src="{% if photo.filename.lower().endswith('.dng') and photo.png_filename %}
+             {{ url_for('static', filename='uploads/' + photo.png_filename) }}
+          {% else %}
+             {{ url_for('static', filename='uploads/' + photo.filename) }}
+          {% endif %}" alt="{{ photo.filename }}" width="400">
+
+<!-- Map Container -->
+<div id="mapid"></div>
+
+<!-- Metadata Form -->
+<form method="post" action="{{ url_for('edit_metadata', photo_id=photo.id) }}">
+    {{ form.hidden_tag() }}
+    {{ form.latitude.label }}<br>
+    {{ form.latitude(id="latitude") }}<br>
+    {{ form.longitude.label }}<br>
+    {{ form.longitude(id="longitude") }}<br>
+    {{ form.timestamp.label }}<br>
+    {{ form.timestamp() }}<br><br>
+    {{ form.submit() }}
+</form>
+
+{% endblock %}
+{% block scripts %}
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet Control Geocoder JS -->
+<script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+<script>
+    // Initialize the map
+    var map = L.map('mapid').setView([{{ form.latitude.data or 0 }}, {{ form.longitude.data or 0 }}], {{ 15 if form.latitude.data and form.longitude.data else 2 }});
+
+    // Add the tile layer (this provides the map visuals)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: 'Rabideauisms'
+    }).addTo(map);
+
+    // Initialize the geocoder control
+    var geocoder = L.Control.geocoder({
+        defaultMarkGeocode: false
+    })
+    .on('markgeocode', function(e) {
+        var latlng = e.geocode.center;
+        map.setView(latlng, 15);
+        // Remove existing marker
+        if (marker) {
+            map.removeLayer(marker);
+        }
+        // Add marker at the geocoded location
+        marker = L.marker(latlng, {draggable: true}).addTo(map);
+        updateLatLngInputs(latlng.lat, latlng.lng);
+
+        // Add event listener for drag end
+        marker.on('dragend', function(e) {
+            var latlng = e.target.getLatLng();
+            updateLatLngInputs(latlng.lat, latlng.lng);
+        });
+    })
+    .addTo(map);
+
+    // Marker variable
+    var marker;
+
+    // If latitude and longitude are available, add a marker
+    {% if form.latitude.data and form.longitude.data %}
+        marker = L.marker([{{ form.latitude.data }}, {{ form.longitude.data }}], {draggable: true}).addTo(map);
+        marker.on('dragend', function(e) {
+            var latlng = e.target.getLatLng();
+            updateLatLngInputs(latlng.lat, latlng.lng);
+        });
+    {% endif %}
+
+    // Add click event to the map
+    map.on('click', function(e) {
+        var lat = e.latlng.lat;
+        var lng = e.latlng.lng;
+
+        // Remove existing marker
+        if (marker) {
+            map.removeLayer(marker);
+        }
+
+        // Add marker to the map at the clicked location
+        marker = L.marker([lat, lng], {draggable: true}).addTo(map);
+
+        // Update form inputs
+        updateLatLngInputs(lat, lng);
+
+        // Add event listener for drag end
+        marker.on('dragend', function(e) {
+            var latlng = e.target.getLatLng();
+            updateLatLngInputs(latlng.lat, latlng.lng);
+        });
+    });
+
+    function updateLatLngInputs(lat, lng) {
+        document.getElementById('latitude').value = lat.toFixed(6);
+        document.getElementById('longitude').value = lng.toFixed(6);
+    }
+</script>
+{% endblock %}

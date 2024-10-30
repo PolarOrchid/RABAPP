@@ -1,0 +1,22 @@
+#timeline-container {
+    display: flex;
+    flex-direction: column;
+}
+
+#timeline-slider {
+    margin: 20px 0;
+}
+
+#timeline-range {
+    width: 100%;
+}
+
+#timeline-output {
+    text-align: center;
+    margin-top: 10px;
+    color: #7f8c8d;
+}
+
+#timeline-map {
+    height: 90vh;
+}
