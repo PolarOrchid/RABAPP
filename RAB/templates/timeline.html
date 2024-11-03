@@ -11,6 +11,7 @@
     }
 </style>
 {% endblock %}
+
 {% block content %}
 <h2>Photo Timeline</h2>
 <div id="timeline-container">
@@ -21,29 +22,35 @@
     <div id="timeline-map"></div>
 </div>
 {% endblock %}
+
 {% block scripts %}
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
-var photoUrlBase = "{{ url_for('photo_view', photo_id=0) }}";
-photoUrlBase = photoUrlBase.replace(/0$/, '');
-var uploadsUrl = "{{ url_for('static', filename='uploads/') }}";
+// Ensure correct base URLs from environment paths
+var uploadsUrl = "{{ uploads_url }}";
 if (!uploadsUrl.endsWith('/')) {
     uploadsUrl += '/';
 }
-var previewsUrl = "{{ url_for('static', filename='previews/') }}";
+var previewsUrl = "{{ previews_url }}";
 if (!previewsUrl.endsWith('/')) {
     previewsUrl += '/';
 }
 </script>
+
+<!-- Load custom timeline script with data attribute for photos URL -->
 <script src="{{ url_for('static', filename='js/timeline.js') }}" data-timeline-photos-url="{{ timeline_photos_url }}"></script>
+
 <script>
-// Ensure the map has the correct attribution "Benjamin" like in the stats map
-document.addEventListener('DOMContentLoaded', function() {
-    var map = L.map('timeline-map').setView([0, 0], 2);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: 'Rabideauisms &copy; OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(map);
-});
+// Initialize the map with proper attribution and prevent reinitialization
+
+var uploadsUrl = "{{ uploads_url }}";
+if (!uploadsUrl.endsWith('/')) {
+    uploadsUrl += '/';
+}
+var previewsUrl = "{{ previews_url }}";
+if (!previewsUrl.endsWith('/')) {
+    previewsUrl += '/';
+}
+
 </script>
 {% endblock %}

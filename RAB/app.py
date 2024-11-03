@@ -1186,7 +1186,13 @@ def create_app():
     @login_required
     @csrf.exempt
     def timeline():
-        return render_template('timeline.html')
+        uploads_url = url_for('static', filename='uploads/')
+        previews_url = url_for('static', filename='previews/')
+        
+        # Pass URLs to the template
+        return render_template('timeline.html', uploads_url=uploads_url, previews_url=previews_url)
+
+
 
     # Ensure all necessary fields are available when retrieving photos
     @app.route('/get_timeline_photos')
@@ -1199,15 +1205,23 @@ def create_app():
         for photo in photos:
             if photo.latitude and photo.longitude and photo.timestamp:
                 added_to_cluster = False
+                # Determine the correct image URL
+                if photo.png_filename:
+                    image_url = url_for('static', filename=f'uploads/{photo.png_filename}')
+                else:
+                    image_url = url_for('static', filename=f'uploads/{photo.filename}')
+
                 for cluster in location_clusters:
-                    # Group photos that are within 400 meters of each other
-                    if geodesic((photo.latitude, photo.longitude), (cluster[0]['latitude'], cluster[0]['longitude'])).meters < 400:
+                    if geodesic(
+                        (photo.latitude, photo.longitude),
+                        (cluster[0]['latitude'], cluster[0]['longitude'])
+                    ).meters < 400:
                         cluster.append({
                             'latitude': photo.latitude,
                             'longitude': photo.longitude,
-                            'filename': photo.png_filename if photo.png_filename else photo.filename,
+                            'filename': image_url,
                             'url': url_for('photo_view', photo_id=photo.id),
-                            'timestamp': photo.timestamp.isoformat()  # Keep the timestamp for slider functionality
+                            'timestamp': photo.timestamp.isoformat()
                         })
                         added_to_cluster = True
                         break
@@ -1215,9 +1229,9 @@ def create_app():
                     location_clusters.append([{
                         'latitude': photo.latitude,
                         'longitude': photo.longitude,
-                        'filename': photo.png_filename if photo.png_filename else photo.filename,
+                        'filename': image_url,
                         'url': url_for('photo_view', photo_id=photo.id),
-                        'timestamp': photo.timestamp.isoformat()  # Include the timestamp
+                        'timestamp': photo.timestamp.isoformat()
                     }])
 
         # Format the data for JavaScript
@@ -1229,10 +1243,11 @@ def create_app():
                 'latitude': avg_lat,
                 'longitude': avg_lon,
                 'count': len(cluster),
-                'photos': cluster  # Pass the photos, each with its timestamp
+                'photos': cluster
             })
         
         return jsonify(photo_list)
+
 
 
     @app.route('/stats')
