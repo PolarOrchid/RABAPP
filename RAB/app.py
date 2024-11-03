@@ -555,6 +555,10 @@ def create_app():
     # Initialize extensions
     db.init_app(app)
     login_manager.init_app(app)
+    # Add this custom unauthorized handler
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        return redirect(url_for('login'))
     mail.init_app(app)
     csrf.init_app(app)
     compress.init_app(app)
@@ -583,8 +587,10 @@ def create_app():
 
     csrf.init_app(app)
     @app.route('/', methods=['GET'])
-    @login_required
     def index():
+        if not current_user.is_authenticated:
+            return render_template('signindirection.html')
+            
         # Get filter parameters from request args
         show_favorites = request.args.get('favorites', 'false').lower() == 'true'
         uploader_id = request.args.get('uploader', type=int)
@@ -622,7 +628,9 @@ def create_app():
         # Get list of users for uploader filter
         users = User.query.all()
 
-        return render_template('index.html', photos=photos, users=users, show_favorites=show_favorites, uploader_id=uploader_id, date_from=date_from, date_to=date_to)
+        return render_template('index.html', photos=photos, users=users, 
+                            show_favorites=show_favorites, uploader_id=uploader_id, 
+                            date_from=date_from, date_to=date_to)
 
 
     @app.route('/login', methods=['GET', 'POST'])
@@ -660,6 +668,16 @@ def create_app():
                 
         return render_template('login.html', form=form)
 
+    @app.route('/welcome')
+    @login_required
+    def welcome():
+        """Welcome screen after email confirmation"""
+        if 'welcome_shown' in session:
+            # If user has already seen welcome screen, redirect to index
+            return redirect(url_for('index'))
+        return render_template('welcome.html')
+
+    # Modify the confirm_email route to redirect to welcome instead of index
     @app.route('/confirm_email/<token>')
     @csrf.exempt
     def confirm_email(token):
@@ -668,14 +686,16 @@ def create_app():
         except Exception as e:
             flash('The link is invalid or has expired.', 'danger')
             return redirect(url_for('login'))
+        
         user = User.query.filter_by(email=email).first()
         if user is None:
             user = User(email=email)
             db.session.add(user)
             db.session.commit()
+        
         login_user(user)
         flash('You have been logged in!', 'success')
-        return redirect(url_for('index'))
+        return redirect(url_for('welcome'))  # Redirect to welcome instead of index
 
     @app.route('/logout')
     @login_required

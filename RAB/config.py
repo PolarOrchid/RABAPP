@@ -24,3 +24,5 @@ class Config:
     PREVIEW_FOLDER = os.path.join(basedir, 'static/previews')
     UPLOAD_CHUNK_SIZE = 8192  # Optimal chunk size for file operations
     MAX_CONTENT_LENGTH = int(os.environ.get('MAX_CONTENT_LENGTH', 167772160000))  # Default to 160 MB if not set
+    CHUNK_FOLDER = 'path/to/chunks'
+

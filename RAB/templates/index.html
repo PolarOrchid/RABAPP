@@ -66,6 +66,21 @@
         background-color: #ecf0f1;
     }
 
+    /* Enhanced date input styles */
+    .filter-menu input[type="date"]::-webkit-calendar-picker-indicator {
+        background: transparent;
+        cursor: pointer;
+        padding: 2px;
+    }
+
+    .filter-menu input[type="date"]::-webkit-datetime-edit {
+        padding: 0;
+    }
+
+    .filter-menu input[type="date"]:invalid {
+        border-color: #e74c3c;
+    }
+
     .checkbox-container {
         display: flex;
         align-items: center;
@@ -118,16 +133,15 @@
         max-width: 600px;
         background-color: #fff;
         border-radius: 8px;
-        overflow: hidden; /* Prevents image overflow */
+        overflow: hidden;
     }
 
     .photo-inner {
         position: relative;
         width: 100%;
         padding-bottom: 75%;
-        overflow: hidden; /* Prevents image overflow */
+        overflow: hidden;
     }
-
 
     .photo img {
         position: absolute;
@@ -136,90 +150,12 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
-        max-height: 100%; /* This ensures the image doesn't grow too large */
+        max-height: 100%;
         transition: transform 0.3s ease;
     }
 
     .photo:hover img {
         transform: scale(1.05);
-    }
-
-    /* Modal/Lightbox Styles */
-    .modal {
-        display: none;
-        position: fixed;
-        z-index: 1000;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.9);
-        justify-content: center;
-        align-items: center;
-    }
-
-    .modal-content {
-        position: relative;
-        max-width: 90%;
-        max-height: 90vh;
-        margin: auto;
-    }
-
-    .full-image {
-        max-width: 100%;
-        max-height: 90vh;
-        object-fit: contain;
-        display: block;
-    }
-
-    .close {
-        position: absolute;
-        top: -40px;
-        right: 0;
-        color: #fff;
-        font-size: 30px;
-        font-weight: bold;
-        cursor: pointer;
-        padding: 5px;
-        z-index: 1001;
-    }
-
-    .modal-nav {
-        position: absolute;
-        top: 50%;
-        transform: translateY(-50%);
-        color: white;
-        font-size: 30px;
-        cursor: pointer;
-        padding: 20px;
-        background-color: rgba(0, 0, 0, 0.5);
-        border-radius: 5px;
-        user-select: none;
-        transition: background-color 0.3s;
-    }
-
-    .modal-nav:hover {
-        background-color: rgba(0, 0, 0, 0.8);
-    }
-
-    .prev {
-        left: 20px;
-    }
-
-    .next {
-        right: 20px;
-    }
-
-    .loading-indicator {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        color: white;
-        background-color: rgba(0, 0, 0, 0.7);
-        padding: 10px 20px;
-        border-radius: 5px;
-        display: none;
     }
 
     /* Loading Screen Styles */
@@ -270,13 +206,11 @@
         color: #34495e;
     }
 
-    /* Hide content initially */
     .content {
         opacity: 0;
         transition: opacity 0.5s ease-in;
     }
 
-    /* Loading more photos text */
     .loading-more {
         text-align: center;
         padding: 10px;
@@ -289,19 +223,11 @@
         .photo {
             width: calc(50% - 20px);
         }
-        .modal-nav {
-            padding: 15px;
-            font-size: 24px;
-        }
     }
 
     @media (max-width: 480px) {
         .photo {
             width: 100%;
-        }
-        .modal-nav {
-            padding: 10px;
-            font-size: 20px;
         }
     }
 </style>
@@ -324,15 +250,25 @@
     <!-- Filter Menu -->
     <div class="filter-menu">
         <h2>Filter Options</h2>
-        <form method="get" action="{{ url_for('index') }}">
+        <form method="get" action="{{ url_for('index') }}" id="filterForm">
             <div class="filter-row">
                 <div class="filter-column">
                     <label for="date_from">From:</label>
-                    <input type="date" name="date_from" id="date_from" value="{{ date_from }}">
+                    <input type="date" 
+                           name="date_from" 
+                           id="date_from" 
+                           value="{{ date_from if date_from }}"
+                           pattern="\d{4}-\d{2}-\d{2}"
+                           placeholder="YYYY-MM-DD">
                 </div>
                 <div class="filter-column">
                     <label for="date_to">To:</label>
-                    <input type="date" name="date_to" id="date_to" value="{{ date_to }}">
+                    <input type="date" 
+                           name="date_to" 
+                           id="date_to" 
+                           value="{{ date_to if date_to }}"
+                           pattern="\d{4}-\d{2}-\d{2}"
+                           placeholder="YYYY-MM-DD">
                 </div>
             </div>
             <div class="filter-row">
@@ -367,17 +303,6 @@
         Loading more photos...
     </div>
 </div>
-
-<!-- Modal -->
-<div class="modal" id="imageModal">
-    <div class="modal-content">
-        <span class="close">&times;</span>
-        <img class="full-image" src="" alt="Full size image">
-        <div class="modal-nav prev">&lt;</div>
-        <div class="modal-nav next">&gt;</div>
-        <div class="loading-indicator">Loading...</div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -402,6 +327,19 @@ const GalleryManager = (function() {
         loadingMore: document.getElementById('loadingMore')
     };
 
+    function formatDateForInput(date) {
+        if (!date) return '';
+        // Ensure date is in YYYY-MM-DD format
+        const d = new Date(date);
+        if (isNaN(d.getTime())) return '';
+        
+        const year = d.getFullYear();
+        // Add leading zero if month/day is single digit
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
     function getFilterParams() {
         const params = new URLSearchParams();
         params.append('page', state.page);
@@ -411,10 +349,23 @@ const GalleryManager = (function() {
             params.append('uploader', uploaderSelect.value);
         }
         
+        // Handle date inputs with proper formatting
         const dateFrom = document.getElementById('date_from');
         const dateTo = document.getElementById('date_to');
-        if (dateFrom && dateFrom.value) params.append('date_from', dateFrom.value);
-        if (dateTo && dateTo.value) params.append('date_to', dateTo.value);
+        
+        if (dateFrom && dateFrom.value) {
+            const formattedDateFrom = formatDateForInput(dateFrom.value);
+            if (formattedDateFrom) {
+                params.append('date_from', formattedDateFrom);
+            }
+        }
+        
+        if (dateTo && dateTo.value) {
+            const formattedDateTo = formatDateForInput(dateTo.value);
+            if (formattedDateTo) {
+                params.append('date_to', formattedDateTo);
+            }
+        }
         
         const favoritesCheckbox = document.getElementById('show-favorites');
         if (favoritesCheckbox && favoritesCheckbox.checked) {
@@ -422,6 +373,36 @@ const GalleryManager = (function() {
         }
         
         return params;
+    }
+
+    function initializeDateInputs() {
+        const dateInputs = document.querySelectorAll('input[type="date"]');
+        dateInputs.forEach(input => {
+            // Set min attribute to a reasonable past date (e.g., 2000-01-01)
+            input.setAttribute('min', '2000-01-01');
+            // Set max attribute to today
+            const today = new Date();
+            const maxDate = formatDateForInput(today);
+            input.setAttribute('max', maxDate);
+
+            // Handle input changes
+            input.addEventListener('change', function(e) {
+                if (this.value) {
+                    const formattedDate = formatDateForInput(this.value);
+                    if (formattedDate) {
+                        this.value = formattedDate;
+                    }
+                }
+            });
+
+            // Handle invalid input
+            input.addEventListener('invalid', function(e) {
+                e.preventDefault();
+                if (!this.value) {
+                    this.value = '';  // Clear invalid value
+                }
+            });
+        });
     }
 
     function hideLoadingScreen() {
@@ -485,10 +466,6 @@ const GalleryManager = (function() {
                     elements.loadingMore.style.display = 'none';
                 }
                 return;
-            }
-
-            if (data[0] && data[0].total_for_user !== undefined) {
-                state.totalPhotosForUser = data[0].total_for_user;
             }
 
             const fragment = document.createDocumentFragment();
@@ -560,9 +537,13 @@ const GalleryManager = (function() {
                 state.page++;
             }
 
+            if (data[0] && data[0].total_for_user !== undefined) {
+                state.totalPhotosForUser = data[0].total_for_user;
+            }
+
             if (state.totalPhotosForUser !== null && state.loadedPhotoIds.size >= state.totalPhotosForUser) {
                 state.hasMorePhotos = false;
-            } else if (data.length < 3) {
+            } else if (data.length < 20) { // Assuming photos_per_page is 20
                 state.hasMorePhotos = false;
             }
             
@@ -578,6 +559,9 @@ const GalleryManager = (function() {
     }
 
     function init() {
+        // Initialize date inputs
+        initializeDateInputs();
+        
         // Handle filter form submission
         if (elements.filterForm) {
             elements.filterForm.addEventListener('submit', function(e) {
@@ -637,5 +621,5 @@ if (document.getElementById('photoGallery')) {
         GalleryManager.init();
     }
 }
-    </script>
+</script>
 {% endblock %}

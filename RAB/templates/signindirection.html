@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@900&display=swap" as="style">
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap" as="style">
+  
+  <style>
+    :root {
+      --color-white: 255, 255, 255;
+      --color-blue: 0, 35, 149;
+      --color-red: 237, 41, 57;
+      --transition-smooth: cubic-bezier(0.45, 0, 0.55, 1);
+      --blur-effect: blur(8px);
+    }
+
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      font-family: "Cormorant Garamond", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+    }
+
+    .error {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 2rem;
+      position: relative;
+      background: linear-gradient(135deg, #040b1f 0%, #1e2b4d 100%);
+    }
+
+    .french-accent {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 3px;
+      z-index: 10;
+      background: linear-gradient(to right,
+        rgb(var(--color-blue)) 0%,
+        rgb(var(--color-blue)) 33.33%,
+        rgb(var(--color-white)) 33.33%,
+        rgb(var(--color-white)) 66.66%,
+        rgb(var(--color-red)) 66.66%,
+        rgb(var(--color-red)) 100%
+      );
+      opacity: 0.7;
+    }
+
+    .corner {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      opacity: 0.1;
+      z-index: 2;
+    }
+
+    .corner::before,
+    .corner::after {
+      content: '';
+      position: absolute;
+      background: rgba(var(--color-white), 0.5);
+    }
+
+    .corner::before {
+      width: 2px;
+      height: 100%;
+    }
+
+    .corner::after {
+      height: 2px;
+      width: 100%;
+    }
+
+    .corner-tl { top: 20px; left: 20px; }
+    .corner-tr { top: 20px; right: 20px; transform: rotate(90deg); }
+    .corner-bl { bottom: 20px; left: 20px; transform: rotate(-90deg); }
+    .corner-br { bottom: 20px; right: 20px; transform: rotate(180deg); }
+
+    .fog-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      z-index: 2;
+    }
+
+    .fog-img {
+      position: absolute;
+      height: 100vh;
+      width: 300vw;
+      z-index: 2;
+      will-change: transform;
+      backface-visibility: hidden;
+    }
+
+    .fog-img-first {
+      background: linear-gradient(to right,
+        transparent,
+        rgba(var(--color-blue), 0.05),
+        transparent);
+      animation: fog 60s linear infinite;
+    }
+
+    .fog-img-second {
+      background: linear-gradient(to right,
+        transparent,
+        rgba(var(--color-red), 0.03),
+        transparent);
+      animation: fog 45s linear infinite;
+      animation-delay: -15s;
+    }
+
+    @keyframes fog {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .content {
+      position: relative;
+      z-index: 4;
+      text-align: center;
+      margin-top: 45vh;
+    }
+
+    .title {
+      font-size: 140px;
+      font-weight: 900;
+      font-family: "Playfair Display", serif;
+      background: linear-gradient(45deg, 
+        rgba(var(--color-white), 0.95),
+        rgba(var(--color-white), 0.4));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
+      line-height: 1;
+      letter-spacing: -2px;
+      filter: drop-shadow(0 0 20px rgba(var(--color-white), 0.2));
+      position: relative;
+      will-change: transform;
+    }
+
+    .title::before {
+      content: "404";
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      -webkit-background-clip: initial;
+      -webkit-text-fill-color: initial;
+      color: transparent;
+      opacity: 0.1;
+      font-size: 180px;
+      z-index: -1;
+      filter: blur(8px);
+      animation: float-shadow 4s ease-in-out infinite;
+    }
+
+    @keyframes float-shadow {
+      0%, 100% { transform: translateX(-50%) scale(1); }
+      50% { transform: translateX(-50%) scale(1.05); }
+    }
+
+    .message {
+      font-size: 1.5rem;
+      color: rgba(var(--color-white), 0.8);
+      margin-bottom: 2.5rem;
+      font-weight: 300;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      position: relative;
+    }
+
+    .message::after {
+      content: "";
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 40px;
+      height: 2px;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(var(--color-white), 0.5),
+        transparent
+      );
+    }
+
+    .home-button {
+      display: inline-flex;
+      align-items: center;
+      padding: 1.2rem 2.5rem;
+      background: rgba(var(--color-white), 0.05);
+      color: white;
+      text-decoration: none;
+      border-radius: 100px;
+      font-weight: 400;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      font-size: 0.9rem;
+      transition: all 0.5s var(--transition-smooth);
+      border: 1px solid rgba(var(--color-white), 0.1);
+      backdrop-filter: var(--blur-effect);
+      position: relative;
+      overflow: hidden;
+      will-change: transform;
+    }
+
+    .home-button::after {
+      content: "⟶";
+      margin-left: 10px;
+      font-size: 1.2em;
+      transition: transform 0.3s ease;
+      display: inline-block;
+    }
+
+    .home-button:before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(var(--color-white), 0.2),
+        transparent
+      );
+      transition: 0.5s;
+    }
+
+    .home-button:hover {
+      background: rgba(var(--color-white), 0.15);
+      border-color: rgba(var(--color-white), 0.2);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+
+    .home-button:hover::after {
+      transform: translateX(5px);
+    }
+
+    .home-button:hover:before {
+      left: 100%;
+    }
+
+    .lamp {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0px;
+      margin: 0 auto;
+      width: 300px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform-origin: center top;
+      animation: move 10s var(--transition-smooth) infinite;
+      z-index: 3;
+      will-change: transform;
+      contain: layout style;
+    }
+
+    .lamp-head {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    @keyframes move {
+      0% { transform: rotate(35deg); }
+      50% { transform: rotate(-35deg); }
+      100% { transform: rotate(35deg); }
+    }
+
+    .cable {
+      width: 8px;
+      height: 350px;
+      background: linear-gradient(to bottom,
+        rgba(var(--color-white), 0.3),
+        rgba(var(--color-white), 0.1));
+      position: relative;
+    }
+
+    .cable::after {
+      content: '';
+      position: absolute;
+      left: -2px;
+      right: -2px;
+      top: 0;
+      bottom: 0;
+      background: linear-gradient(to right,
+        transparent,
+        rgba(var(--color-white), 0.1),
+        transparent);
+      animation: cable-shine 4s linear infinite;
+    }
+
+    @keyframes cable-shine {
+      0%, 100% { opacity: 0; }
+      50% { opacity: 1; }
+    }
+
+    .cover {
+      width: 200px;
+      height: 80px;
+      background: rgba(var(--color-white), 0.1);
+      border-top-left-radius: 50%;
+      border-top-right-radius: 50%;
+      position: relative;
+      z-index: 200;
+      backdrop-filter: var(--blur-effect);
+      border: 1px solid rgba(var(--color-white), 0.2);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    }
+
+    .in-cover {
+      width: 100%;
+      max-width: 200px;
+      height: 20px;
+      border-radius: 100%;
+      background: rgba(var(--color-white), 0.15);
+      position: absolute;
+      left: 0;
+      right: 0;
+      margin: 0 auto;
+      bottom: -9px;
+      z-index: 100;
+      backdrop-filter: var(--blur-effect);
+    }
+
+    .in-cover .bulb {
+      width: 50px;
+      height: 50px;
+      background: radial-gradient(
+        circle at center,
+        rgb(var(--color-white)),
+        rgba(var(--color-white), 0.8)
+      );
+      border-radius: 50%;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -20px;
+      margin: 0 auto;
+      box-shadow: 
+        0 0 25px 7px rgba(var(--color-white), 0.4),
+        0 0 64px 47px rgba(var(--color-white), 0.2),
+        0 0 30px 15px rgba(var(--color-white), 0.1),
+        0 0 90px 70px rgba(var(--color-blue), 0.1);
+      animation: bulb-glow 2s ease-in-out infinite alternate;
+      will-change: opacity;
+    }
+
+    @keyframes bulb-glow {
+      from { opacity: 0.9; }
+      to { opacity: 1; }
+    }
+
+    .light {
+      width: 200px;
+      height: 2200px;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 420px;
+      background: linear-gradient(180deg, 
+        rgba(var(--color-white), 0.07) 0%,
+        rgba(var(--color-white), 0.03) 100%);
+      clip-path: polygon(
+        20% 0%,
+        80% 0%,
+        100% 100%,
+        0% 100%
+      );
+      backdrop-filter: blur(5px);
+      animation: light-flicker 4s ease-in-out infinite;
+      will-change: opacity;
+    }
+
+    @keyframes light-flicker {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.95; }
+    }
+
+    .particles {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      pointer-events: none;
+    }
+
+    .particle {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background-color: rgba(var(--color-white), 0.5);
+      border-radius: 50%;
+      box-shadow: 0 0 10px rgba(var(--color-white), 0.5);
+      will-change: transform, opacity;
+      animation: particle-rise 15s linear infinite;
+    }
+
+    @keyframes particle-rise {
+      0% {
+        transform: translateY(100vh) translateX(0);
+        opacity: 0;
+      }
+      50% {
+        transform: translateY(50vh) translateX(20px);
+        opacity: 0.5;
+      }
+      100% {
+        transform: translateY(0) translateX(0);
+        opacity: 0;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .title {
+        font-size: 90px;
+      }
+      .title::before {
+        font-size: 120px;
+      }
+      .message {
+        font-size: 1.25rem;
+      }
+      .lamp {
+        zoom: 0.6;
+      }
+      .content {
+        margin-top: 40vh;
+      }
+      .corner {
+        width: 30px;
+        height: 30px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="error">
+    <div class="french-accent"></div>
+    <div class="corner corner-tl"></div>
+    <div class="corner corner-tr"></div>
+    <div class="corner corner-bl"></div>
+    <div class="corner corner-br"></div>
+
+    <div class="fog-container">
+      <div class="fog-img fog-img-first"></div>
+      <div class="fog-img fog-img-second"></div>
+    </div>
+
+    <div class="particles">
+      <script>
+        requestAnimationFrame(() => {
+          const fragment = document.createDocumentFragment();
+          const particlesContainer = document.querySelector('.particles');
+          
+          for (let i = 0; i < 50; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.cssText = `
+
+left: ${Math.random() * 100}vw;
+              animation-delay: ${Math.random() * 15}s;
+              opacity: ${Math.random() * 0.5};
+            `;
+            fragment.appendChild(particle);
+          }
+          particlesContainer.appendChild(fragment);
+        });
+      </script>
+    </div>
+
+    <div class="lamp">
+      <div class="lamp-head">
+        <div class="cable"></div>
+        <div class="cover"></div>
+        <div class="in-cover">
+          <div class="bulb"></div>
+        </div>
+      </div>
+      <div class="light"></div>
+    </div>
+
+    <div class="content">
+      <h1 class="title">Salut</h1>
+      <p class="message">You need to login first</p>
+      <a href="/login" class="home-button">Log Me In</a>
+    </div>
+  </div>
+</body>
+</html>

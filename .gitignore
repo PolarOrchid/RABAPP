@@ -33,3 +33,5 @@ migrations/
 # Ignore chunked-upload-worker directory
 chunked-upload-worker/
 
+
+RAB/templates/welcomeMobile.html
