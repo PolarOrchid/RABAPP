@@ -56,6 +56,93 @@ from werkzeug.exceptions import ClientDisconnected
 logging.basicConfig(level=logging.DEBUG)
 load_dotenv()  # Load environment variables from .env
 
+
+
+from flask_mail import Message
+from flask import render_template_string
+
+def send_login_email(email, link):
+    # HTML template with inline styles (required for email clients)
+    html_template = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; line-height: 1.6; background-color: #f4f4f4;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background-color: white; border-radius: 8px; padding: 40px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <!-- Optional: Add your logo here -->
+                    <h1 style="color: #333; margin: 0; font-size: 24px;">Rabideauisms Login</h1>
+                </div>
+                
+                <p style="color: #555; font-size: 16px; margin-bottom: 25px;">
+                    Hello,
+                </p>
+                
+                <p style="color: #555; font-size: 16px; margin-bottom: 25px;">
+                    You requested to log in to your Rabideauisms account. Click the button below to securely sign in:
+                </p>
+                
+                <div style="text-align: center; margin: 35px 0;">
+                    <a href="{{ link }}" style="background-color: #4CAF50; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Sign In to Rabideauisms</a>
+                </div>
+                
+                <p style="color: #555; font-size: 16px; margin-bottom: 25px;">
+                    This login link will expire in 1 hour for security reasons. If you didn't request this login, you can safely ignore this email.
+                </p>
+                
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; color: #888; font-size: 13px;">
+                    <p style="margin-bottom: 10px;">
+                        If the button doesn't work, you can copy and paste this link into your browser:
+                    </p>
+                    <p style="word-break: break-all; color: #666;">
+                        {{ link }}
+                    </p>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 20px; color: #888; font-size: 12px;">
+                <p>
+                    This is an automated message, please do not reply to this email.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+
+    # Plain text version for email clients that don't support HTML
+    text_template = '''
+    Rabideauisms Login
+
+    Hello,
+
+    You requested to log in to your Rabideauisms account. Click the link below to securely sign in:
+
+    {{ link }}
+
+    This login link will expire in 1 hour for security reasons.
+    If you didn't request this login, you can safely ignore this email.
+
+    This is an automated message, please do not reply to this email.
+    '''
+
+    # Render both templates with the login link
+    html_content = render_template_string(html_template, link=link)
+    text_content = render_template_string(text_template, link=link)
+
+    # Create the email message with both HTML and text versions
+    msg = Message('Sign in to Rabideauisms',
+                sender=current_app.config['MAIL_USERNAME'],
+                recipients=[email])
+    msg.body = text_content
+    msg.html = html_content
+    
+    return msg
+
 def send_file_partial(path, start=0, end=None):
     """Send a file in chunks with proper range handling."""
     file_size = os.path.getsize(path)
@@ -651,10 +738,8 @@ def create_app():
                 link = url_for('confirm_email', token=token, _external=True)
                 
                 try:
-                    msg = Message('Your Magic Login Link', 
-                                sender=current_app.config['MAIL_USERNAME'],
-                                recipients=[email])
-                    msg.body = f'Click the link to log in: {link}'
+                    # Create and send the enhanced email
+                    msg = send_login_email(email, link)
                     mail.send(msg)
                     flash('A magic link has been sent to your email.', 'info')
                 except Exception as e:
